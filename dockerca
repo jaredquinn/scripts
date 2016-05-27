@@ -1,0 +1,63 @@
+#!/bin/bash
+# Create Docker Signed Certificates
+#
+_type=$1
+
+[ ! -f ca-key.pem ] && \
+  echo Creating new CA Key && \
+  openssl genrsa -aes256 -out ca-key.pem 4096
+
+[ ! -f ca.pem ]     && \
+  echo Creating new CA Certificate && \
+  openssl req -new -x509 -days 365 -key ca-key.pem -sha256 -out ca.pem
+
+[ ! -f chain.pem ] && cp ca.pem chain.pem
+
+
+case "${_type}" in
+   server)
+	  _host=${2:=default}
+	  _ip=${3:=10.10.10.1}
+	  _hostdir="./server/${_host}"
+	;;
+    client)
+	  _name=${2:=default}
+	  _host="client"
+ 	  _hostdir="./client/${_name}"
+	  _extline='extendedKeyUsage = clientAuth'
+	;;
+    swarm)
+	  _name=${2:=swarm}
+	  _ip=${3:=10.10.10.1}
+	  _host="swarm"
+ 	  _hostdir="./swarm/${_name}"
+	  _extline='extendedKeyUsage = serverAuth, clientAuth'
+	;;
+    *)
+	echo Usage:
+	echo  $0 client \<name\>
+	echo  $0 server \<fqdn\> \<ip\>
+	echo  $0 swarm \<fqdn\> \<ip\>
+	exit	
+	;;
+esac
+
+[ -d "${_hostdir}" ] && echo ERROR: $_host already exists && exit
+
+mkdir -p "${_hostdir}"
+
+openssl genrsa -out "${_hostdir}/key.pem" 4096
+openssl req -subj "/CN=$_host" -sha256 -new -key "${_hostdir}/key.pem" -out "${_hostdir}/request.pem"
+
+if [ "$_host" == "client" ]; then
+  echo "${_extline}" > "${_hostdir}/extfile.cnf"
+else
+  echo subjectAltName = IP:${_ip},IP:127.0.0.1 > "${_hostdir}/extfile.cnf"
+fi
+
+openssl x509 -req -days 365 -sha256 -in "${_hostdir}/request.pem" -CA ca.pem -CAkey ca-key.pem -CAcreateserial -out "${_hostdir}/cert.pem" -extfile "${_hostdir}/extfile.cnf"
+
+cp chain.pem "${_hostdir}/ca.pem" 
+rm "${_hostdir}/extfile.cnf" "${_hostdir}/request.pem"
+
+
