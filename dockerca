@@ -28,8 +28,8 @@ case "${_type}" in
 	;;
     swarm)
 	  _name=${2:=swarm}
+	  _host=${_name}
 	  _ip=${3:=10.10.10.1}
-	  _host="swarm"
  	  _hostdir="./swarm/${_name}"
 	  _extline='extendedKeyUsage = serverAuth, clientAuth'
 	;;
